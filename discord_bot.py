@@ -45,12 +45,12 @@ def discord_bot(config_ini, stream_status):
             return
         if args == "start":
             # 配信開始送信
-            # obs_operator.stream_start()
+            obs_operator.stream_start()
             await ctx.send('配信開始！')
 
         elif args in ['stop', 'end']:
             # 配信終了送信
-            # obs_operator.stream_stop()
+            obs_operator.stream_stop()
             await ctx.send('配信終了！')
 
         elif args == 'pause':
@@ -65,11 +65,11 @@ def discord_bot(config_ini, stream_status):
         if not is_in_target_channel(ctx):
             return
         if args == "on":
-            # obs_operator.stream_start()
+            obs_operator.stream_start()
             await ctx.send('ちょっと待ってね')
 
         elif args == 'off':
-            # obs_operator.stream_stop()
+            obs_operator.stream_stop()
             await ctx.send('もどりました')
         await ctx.reply('Hello!')
 

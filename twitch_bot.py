@@ -36,9 +36,6 @@ class TwitchBot(commands.Bot):
 
     async def event_ready(self):
         self.logger.info('started twitch bot!')
-        # print("全てのチャンネルにログインしました。")
-        # print(f'ユーザーID: {self.user_id}')
-        # print(f'ユーザー名: {self.nick}')
 
     # コメントが書き込まれると呼び出される
     async def event_message(self, message: Message):
@@ -57,11 +54,6 @@ class TwitchBot(commands.Bot):
 
         if message.content.startswith(self.config['Command_Prefix']):
             await self.handle_commands(message)
-
-        # print(f'ユーザーID: {message.author.name}')
-        # print(f'ユーザー名: {message.author.display_name}')
-        # オウム返し
-        # await message.channel.send(f"{message.content}")
 
     # hello こんにちは
     @commands.command(name='hello')
@@ -136,17 +128,6 @@ class TwitchBot(commands.Bot):
             elif auth == 'all':
                 return True
         return False
-
-    def shutdown(self):
-        try:
-            pass
-            # self.logger.info('twitch_bot is shutting down.')
-            # self.scheduler.shutdown()
-        except Exception as e:
-            raise
-
-    def __del__(self):
-        self.shutdown()
 
 def create(config, stream_status):
     return TwitchBot(config, stream_status)

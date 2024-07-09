@@ -11,7 +11,6 @@ def run_twitch(config_ini, stream_status):
     twitch.run()
 
 def run_discord(config_ini, stream_status):
-    # discord = discord_bot.create(config_ini, stream_status)
     discord = discord_bot(config_ini, stream_status)
     discord.run(config_ini['discord']['Token'])
 
@@ -28,7 +27,7 @@ def main():
         stream_status = manager.dict()
         stream_status['stream_camera_on'] = False
         stream_status['stream_scene'] = 'intro' # [intro, live, fail, low]
-        stream_status['stream_previous_scene'] = 'intro' 
+        stream_status['stream_previous_scene'] = 'intro'
         stream_status['stream_bitrate'] = None
         stream_status['obs_active'] = False
 
@@ -47,7 +46,6 @@ def main():
                 target=run_discord, args=(config_ini, stream_status) )
             p_discord.start()
 
-        # logger.debug('starting webapp')
         web_app = WebApp(config_ini, stream_status)
         web_app.run()
 
