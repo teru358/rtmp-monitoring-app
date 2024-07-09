@@ -108,7 +108,7 @@ class OBSOperator(OBSController):
             # self.logger.info('scene change PAUSE')
 
     # sceneをpauseから戻す
-    def scene_change_pause_on(self):
+    def scene_change_pause_off(self):
         if self.stream_status['stream_scene'] == 'pause' :
             self.set_scene(self.config_obs['stream_previous_scene'])
             self.stream_status['stream_scene'] = self.stream_status['stream_previous_scene']
