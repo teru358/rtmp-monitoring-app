@@ -116,6 +116,15 @@ class OBSController():
             self.logger.error("Error specified source name does not exist.")
             return False
 
+    def set_text_source(self, source_name, new_text):
+        self.connect()
+        response = self.ws.call(requests.GetInputSettings(inputName=source_name))
+        settings = response.getInputSettings()
+        settings['text'] = new_text
+        response = self.ws.call(requests.SetInputSettings(inputName=source_name, inputSettings=settings))
+        self.disconnect()
+        return response
+
     def get_streaming_status(self):
         return self.monitor.get_streaming_stat()
 
