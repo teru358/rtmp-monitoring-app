@@ -43,43 +43,46 @@ def discord_bot(config_ini, stream_status):
     async def stream(ctx, args: str):
         if not config['obs_command_control'] :
             return
-        if args == "start":
+        if args in ['start', 'on']:
             # 配信開始送信
-            obs_operator.stream_start()
-            await ctx.send('配信開始！')
+            # obs_operator.stream_start()
+            await ctx.send('配信準備中')
 
-        elif args in ['stop', 'end']:
+        elif args in ['stop', 'end', 'off']:
             # 配信終了送信
-            obs_operator.stream_stop()
-            await ctx.send('配信終了！')
+            # obs_operator.stream_stop()
+            await ctx.send('配信終了')
+
+        elif args == 'live':
+            obs_operator.stream_to_live()
+            await ctx.send('配信開始')
 
         elif args == 'pause':
             obs_operator.stream_switching_pause()
-            await ctx.send('待機画面を切り替えるよ')
+            await ctx.send('待機を切り替えます')
 
         else:
             await ctx.send('incorrect argument!')
 
     @bot.command(name='pause')
-    async def hello(ctx):
+    async def pause(ctx, args: str = None):
         if not is_in_target_channel(ctx):
             return
-        if args == "on":
-            obs_operator.stream_start()
-            await ctx.send('ちょっと待ってね')
+        if args == 'on' or args is None:
+            obs_operator.scene_change_pause_on()
+            await ctx.send('待機に切り替えます')
 
         elif args == 'off':
-            obs_operator.stream_stop()
-            await ctx.send('もどりました')
-        await ctx.reply('Hello!')
+            obs_operator.scene_change_pause_off()
+            await ctx.send('待機から戻ります')
 
     @bot.event
     async def on_command_error(ctx, error):
         if isinstance(error, commands.CommandNotFound):
-            await ctx.send('コマンドがみつからないよ!')
+            await ctx.send('コマンドがないです!')
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send('コマンドの引数がおかしいよ!')
+            await ctx.send('コマンドの引数が変です!')
         else:
-            await ctx.send(f'コマンドがエラーした…: {error}')
+            await ctx.send(f'コマンドエラーです: {error}')
 
     return bot

@@ -83,14 +83,24 @@ class TwitchBot(commands.Bot):
             return
         if isinstance(args, str):
             if self.message_auth_check(ctx.message, ['broadcaster']):
-                if args == "start":
+                if args in ['start', 'on']:
                     # 配信開始送信
                     self.obs_operator.stream_start()
-                    await ctx.send('stream start')
-                elif args == "stop":
+                    await ctx.send('配信準備中')
+
+                elif args in ['stop', 'end', 'off']:
                     # 配信終了送信
                     self.obs_operator.stream_stop()
-                    await ctx.send('stream end')
+                    await ctx.send('配信終了')
+
+                elif args == 'live':
+                    self.obs_operator.stream_to_live()
+                    await ctx.send('配信開始')
+
+                elif args == "pause":
+                    # 配信終了送信
+                    self.obs_operator.stream_switching_pause()
+                    await ctx.send('待機を切り替えます')
                 else:
                     await ctx.send(self.__command_error_message)
             else:
@@ -106,9 +116,13 @@ class TwitchBot(commands.Bot):
             return
         if isinstance(args, str):
             if self.message_auth_check(ctx.message, ['broadcaster']):
-                # 一時中断送信
-                self.obs_operator.stream_switching_pause()
-                await ctx.send('stream pause')
+                if args == 'on' or args is None:
+                    obs_operator.scene_change_pause_on()
+                    await ctx.send('待機に切り替えます')
+
+                elif args == 'off':
+                    obs_operator.scene_change_pause_off()
+                    await ctx.send('待機から戻ります')
             else:
                 await ctx.send(self.__auth_error_message)
         else:
