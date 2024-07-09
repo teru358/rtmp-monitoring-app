@@ -28,27 +28,25 @@ class WebApp:
         def webhook():
             data = request.json
             # Webhookで受信したデータを処理する
-            # print("Received webhook data:", data)
-            if True: #('passwd', self.config_http['webhook_passwd']) in data.items(): # webhookのpasswd用（仮）
-                if ('stream', 'start') in data.items(): # 配信開始
-                    self.obs_operator.stream_start()
+            if ('stream', 'start') in data.items(): # 配信開始
+                self.obs_operator.stream_start()
 
-                elif ('stream', 'stop') in data.items(): # 配信終了
-                    self.obs_operator.stream_stop()
+            elif ('stream', 'stop') in data.items(): # 配信終了
+                self.obs_operator.stream_stop()
 
-                elif ('stream', 'restart') in data.items(): # 配信再起動
-                    pass
-
-                elif ('stream', 'live') in data.items(): # live画面へ(カメラONしたあと)
-                    bw_in = self._get_bw_in()
-                    if int(self.config_obs['RTMP_Low_Bitrate_Value']) < bw_in :
-                        self.obs_operator.stream_to_live()
-
-                elif ('stream', 'pause') in data.items(): # pause画面
-                    self.obs_operator.stream_switching_pause()
-
-            else:
+            elif ('stream', 'restart') in data.items(): # 配信再起動
                 pass
+
+            elif ('stream', 'live') in data.items(): # live画面へ(カメラONしたあと)
+                bw_in = self._get_bw_in()
+                if int(self.config_obs['RTMP_Low_Bitrate_Value']) < bw_in :
+                    self.obs_operator.stream_to_live()
+
+            elif ('stream', 'pause') in data.items(): # pause画面
+                self.obs_operator.stream_switching_pause()
+
+            elif ('stream', 'text') in data.items():
+                self.obs_operator.set_text_source('bitrate', data['content'])
 
             return jsonify({'status': 'success'})
 
@@ -88,6 +86,9 @@ class WebApp:
 
     # bw_inによる自動切替操作、スケジューラーによる監視
     def _stream_status_control_monitoring(self):
+        if self.stream_status['stream_scene'] in ['intro', 'pause']:
+            print('switch skipped')
+            return
         bw_in = self._get_bw_in()
         self.logger.info(f'IRL bitrate {bw_in}')
 
