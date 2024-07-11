@@ -50,6 +50,10 @@ class WebApp:
 
             return jsonify({'status': 'success'})
 
+        @self.app.route('/bitrate', methods=['GET'])
+            def bitrate():
+                return jsonify(data)
+
     def _setup_scheduler(self):
         self.scheduler.add_interval_job_condition(
             func=self._stream_status_control_monitoring,
