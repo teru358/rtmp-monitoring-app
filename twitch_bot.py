@@ -4,8 +4,8 @@ from twitchio.ext import commands
 import requests
 import json
 from obs_operator import OBSOperator
-from scheduler_module import Scheduler
-from logger_module import LoggerConfig
+from modules.scheduler import Scheduler
+from modules.logger import LoggerConfig
 
 class TwitchBot(commands.Bot):
 

@@ -2,8 +2,8 @@
 import discord
 from discord.ext import commands
 from obs_operator import OBSOperator
-from scheduler_module import Scheduler
-from logger_module import LoggerConfig
+from modules.scheduler import Scheduler
+from modules.logger import LoggerConfig
 
 def discord_bot(config_ini, stream_status):
     intents = discord.Intents.default()

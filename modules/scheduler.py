@@ -2,7 +2,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.interval import IntervalTrigger
-from logger_module import LoggerConfig
+from .logger import LoggerConfig
 import inspect
 import os
 

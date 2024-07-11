@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from obs_websocket_module import OBSController
+from modules.obs_controler import OBSController
 
 class OBSOperator(OBSController):
 

@@ -4,7 +4,7 @@ import multiprocessing as mp
 import twitch_bot
 from discord_bot import discord_bot
 from web_app import WebApp
-from logger_module import LoggerConfig
+from modules.logger import LoggerConfig
 
 def run_twitch(config_ini, stream_status):
     twitch = twitch_bot.create(config_ini, stream_status)

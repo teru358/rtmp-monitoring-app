@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 from obswebsocket import obsws, requests, events
-from logger_module import LoggerConfig
+from .logger import LoggerConfig
 
 class OBSController():
     def __init__(self,  config_obs):

@@ -3,8 +3,8 @@ from flask import Flask, request, jsonify
 import requests
 import xml.etree.ElementTree as ET
 from obs_operator import OBSOperator
-from scheduler_module import Scheduler
-from logger_module import LoggerConfig
+from modules.scheduler import Scheduler
+from modules.logger import LoggerConfig
 
 class WebApp:
     def __init__(self, config_ini, stream_status):
