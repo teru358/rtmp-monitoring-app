@@ -51,8 +51,8 @@ class WebApp:
             return jsonify({'status': 'success'})
 
         @self.app.route('/bitrate', methods=['GET'])
-            def bitrate():
-                return jsonify(data)
+        def bitrate():
+            return jsonify(data)
 
     def _setup_scheduler(self):
         self.scheduler.add_interval_job_condition(
