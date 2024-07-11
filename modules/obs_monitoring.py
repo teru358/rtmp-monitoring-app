@@ -3,7 +3,7 @@ import obswebsocket
 from obswebsocket import obsws, requests, exceptions
 
 class OBSMonitor:
-    def __init__(self, host='localhost', port=4444, password=''):
+    def __init__(self, host='localhost', port=4455, password=''):
         self.host = host
         self.port = port
         self.password = password
@@ -13,10 +13,13 @@ class OBSMonitor:
     async def check_obs_running(self):
         try:
             ws = obsws(self.host, self.port, self.password)
-            ws.connect()
+            print('Trying to connect to OBS...')
+
+            # 非同期で接続を試みる
+            await asyncio.wait_for(asyncio.to_thread(ws.connect), timeout=5)
             ws.disconnect()
             return True
-        except exceptions.ConnectionFailure:
+        except (exceptions.ConnectionFailure, asyncio.TimeoutError):
             return False
 
     async def monitor(self):
@@ -31,10 +34,12 @@ class OBSMonitor:
 
             await asyncio.sleep(self.check_interval)
 
-    async def run(self):
-        while True:
-            await self.monitor()
+    def run(self):
+        async def start():
+            while True:
+                await self.monitor()
+        asyncio.run(start())
 
 if __name__ == "__main__":
     monitor = OBSMonitor()
-    asyncio.run(monitor.run())
+    monitor.run()
