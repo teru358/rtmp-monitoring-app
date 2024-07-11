@@ -29,7 +29,7 @@ def main():
         stream_status['stream_scene'] = 'intro' # [intro, live, fail, low]
         stream_status['stream_previous_scene'] = 'intro'
         stream_status['stream_bitrate'] = None
-        stream_status['obs_active'] = False
+        stream_status['obs_is_active'] = False
 
         p_twitch  = None
         p_discord = None
