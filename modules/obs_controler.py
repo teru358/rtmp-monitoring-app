@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from obswebsocket import obsws, requests, events
+from obswebsocket import obsws, requests, events, exceptions
 from .logger import LoggerConfig
 
 class OBSController():
@@ -15,14 +15,22 @@ class OBSController():
         self.ws = None
 
         # 要 obsの死活確認
-        self._get_scene_item_id_dict()
+        # self._get_scene_item_id_dict()
 
     def connection(func):
-        def wrapper():
-            self.connect()
-            func()
-            self.disconnect()
-            return wrapper
+        def wrapper(self, *args, **kwargs):
+            try:
+                self.connect()
+                return func(self, *args, **kwargs)
+
+            except Exception as e:
+                print(f"Error: {e}")
+                return False
+
+            finally:
+                self.disconnect()
+
+        return wrapper
 
 
     def connect(self):
@@ -36,79 +44,61 @@ class OBSController():
             self.ws = None
             # self.logger.info("Disconnected from OBS WebSocket")
 
-    def obs_startup_check(self, timeout=5):
-        try:
-            self.ws.connect()
-            print("Connected to OBS WebSocket.")
-            return True
-        except obswebsocket.exceptions.ConnectionFailure:
-            print("Failed to connect to OBS WebSocket.")
-            return False
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return False
-
+    @connection
     def start_streaming(self):
-        self.connect()
         response = lf.ws.call(requests.StartStreaming())
-        self.disconnect()
         self.logger.info("Streaming started")
         return response
 
+    @connection
     def stop_streaming(self):
-        self.connect()
         response = self.ws.call(requests.StopStreaming())
-        self.disconnect()
         self.logger.info("Streaming stopped")
         return response
 
+    @connection
     def set_scene(self, scene_name):
-        self.connect()
         response = self.ws.call(requests.SetCurrentProgramScene(sceneName=scene_name))
-        self.disconnect()
         self.logger.info(f"Scene set to {scene_name}")
         return response
 
+    @connection
     def show_source(self, scene_name, source_name):
         scene_item_id = self._get_scene_item_id(scene_name, source_name)
         if scene_item_id:
-            self.connect()
             response = self.ws.call(requests.SetSceneItemEnabled(
                 sceneName=scene_name,
                 sceneItemId=scene_item_id,
                 sceneItemEnabled=True ))
-            self.disconnect()
             self.logger.info(f"Source {source_name} visible")
             return response
         else:
             self.logger.error("Error specified source name does not exist.")
             return False
 
+    @connection
     def hide_source(self, scene_name, source_name):
         scene_item_id = self._get_scene_item_id(scene_name, source_name)
         if scene_item_id:
-            self.connect()
             response = self.ws.call(requests.SetSceneItemEnabled(
                 sceneName=scene_name,
                 sceneItemId=scene_item_id,
                 sceneItemEnabled=False ))
-            self.disconnect()
             self.logger.info(f"Source {source_name} hidden")
             return response
         else:
             self.logger.error("Error specified source name does not exist.")
             return False
 
+    @connection
     def set_source_in_scene_visibility(self, scene_name, source_name, visibility):
         scene_item_id = self._get_scene_item_id(scene_name, source_name)
         visibility = True if visibility == 'visible' else False
         if scene_item_id:
-            self.connect()
             response = self.ws.call(requests.SetSceneItemEnabled(
                 sceneName=scene_name,
                 sceneItemId=scene_item_id,
                 sceneItemEnabled=visibility ))
-            self.disconnect()
             state = 'visible' if visibility else 'hidden'
             self.logger.info(f"Source '{source_name}' in scene '{scene_name}' is now {state}")
             return response
@@ -116,13 +106,12 @@ class OBSController():
             self.logger.error("Error specified source name does not exist.")
             return False
 
+    @connection
     def set_text_source(self, source_name, new_text):
-        self.connect()
         response = self.ws.call(requests.GetInputSettings(inputName=source_name))
         settings = response.getInputSettings()
         settings['text'] = new_text
         response = self.ws.call(requests.SetInputSettings(inputName=source_name, inputSettings=settings))
-        self.disconnect()
         return response
 
     def get_streaming_status(self):
@@ -147,15 +136,14 @@ class OBSController():
         asyncio.run(self.monitor.disconnect())
 
     # RTMP_Low_Bitrate_Source_NameのsceneItemIdを取得しておく
+    @connection
     def _get_scene_item_id_dict(self):
         self.connect()
         scenes = self.ws.call(requests.GetSceneList())
         source_name = self.config_obs['RTMP_Low_Bitrate_Source_Name']
         if scenes.status:
             for s in scenes.getScenes():
-                sid = self.ws.call(requests.GetSceneItemId(
-                    sceneName=s['sceneName'],
-                    sourceName=source_name ))
+                sid = self.ws.call(requests.GetSceneItemId(sceneName=s['sceneName'], sourceName=source_name))
                 if vars(sid)['status'] :
                     self.scenes_dict[s['sceneName']] = {source_name: sid.datain['sceneItemId']}
         else:
@@ -168,6 +156,19 @@ class OBSController():
             if source_name in scene_sources:
                 return scene_sources[source_name]
         return None
+
+    @connection
+    def get_current_scene_name(self):
+        response = self.ws.call(requests.GetCurrentProgramScene())
+        return response.getSceneName()
+
+    @connection
+    def get_scene_item_id_in_current_scene(self, source_name):
+        response1 = self.ws.call(requests.GetCurrentProgramScene())
+        scene_name = response1.getSceneName()
+        response2 = self.ws.call(requests.GetSceneItemId(sceneName=scene_name, sourceName=source_name))
+        scene_item_id = response2.getSceneItemId()
+        return scene_item_id
 
     class OBSMonitor:
         def __init__(self, host, port, password):
@@ -210,24 +211,3 @@ class OBSController():
 
         def get_streaming_stat(self):
             return self.is_streaming
-
-# クラスの利用例
-if __name__ == '__main__':
-    obs_controller = OBSController(host='localhost', port=4444, password='your_password')
-    obs_controller.start_monitoring()
-
-    # 配信開始
-    obs_controller.start_streaming()
-
-    # 5秒待機
-    import time
-    time.sleep(5)
-
-    # 配信停止
-    obs_controller.stop_streaming()
-
-    # 配信状況を確認
-    print(f"Streaming status: {obs_controller.get_streaming_status()}")
-
-    # 監視停止
-    obs_controller.stop_monitoring()
