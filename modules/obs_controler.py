@@ -22,16 +22,12 @@ class OBSController():
             try:
                 self.connect()
                 return func(self, *args, **kwargs)
-
             except Exception as e:
                 print(f"Error: {e}")
                 return False
-
             finally:
                 self.disconnect()
-
         return wrapper
-
 
     def connect(self):
         self.ws = obsws(self.host, self.port, self.password)
@@ -46,13 +42,13 @@ class OBSController():
 
     @connection
     def start_streaming(self):
-        response = lf.ws.call(requests.StartStreaming())
+        response = self.ws.call(requests.StartStream())
         self.logger.info("Streaming started")
         return response
 
     @connection
     def stop_streaming(self):
-        response = self.ws.call(requests.StopStreaming())
+        response = self.ws.call(requests.StopStream())
         self.logger.info("Streaming stopped")
         return response
 
@@ -114,13 +110,6 @@ class OBSController():
         response = self.ws.call(requests.SetInputSettings(inputName=source_name, inputSettings=settings))
         return response
 
-    def get_streaming_status(self):
-        return self.monitor.get_streaming_stat()
-
-    # wrapper from get_streaming_status
-    def is_streaming(self):
-        return self.monitor.get_streaming_stat()
-
     # for test
     def is_streaming_true(self):
         return True
@@ -128,12 +117,6 @@ class OBSController():
     # for test
     def is_streaming_false(self):
         return False
-
-    def start_monitoring(self):
-        asyncio.run(self.monitor.connect())
-
-    def stop_monitoring(self):
-        asyncio.run(self.monitor.disconnect())
 
     # RTMP_Low_Bitrate_Source_NameのsceneItemIdを取得しておく
     @connection
@@ -169,45 +152,3 @@ class OBSController():
         response2 = self.ws.call(requests.GetSceneItemId(sceneName=scene_name, sourceName=source_name))
         scene_item_id = response2.getSceneItemId()
         return scene_item_id
-
-    class OBSMonitor:
-        def __init__(self, host, port, password):
-            self.host = host
-            self.port = port
-            self.password = password
-            self.logger = LoggerConfig.get_logger(self.__class__.__name__)
-            self.ws = obsws(self.host, self.port, self.password)
-            self.is_streaming = False
-            self.loop = asyncio.get_event_loop()
-
-        async def connect(self):
-            self.ws.connect()
-            self.ws.register(self.on_event)
-            self.logger.info("Connected to OBS WebSocket")
-            self.loop.create_task(self.monitor_streaming_status())
-
-        async def disconnect(self):
-            self.ws.disconnect()
-            self.logger.info("Disconnected from OBS WebSocket")
-
-        def on_event(self, event):
-            if isinstance(event, events.StreamStarted):
-                self.is_streaming = True
-                self.logger.info("Stream started")
-            elif isinstance(event, events.StreamStopped):
-                self.is_streaming = False
-                self.logger.info("Stream stopped")
-
-        async def monitor_streaming_status(self):
-            while True:
-                await asyncio.sleep(1)  # 1秒間隔で監視
-                try:
-                    status = self.ws.call(requests.GetStreamingStatus())
-                    if status.getStreaming() != self.is_streaming:
-                        self.is_streaming = status.getStreaming()
-                        self.logger.info(f"Streaming status updated: {self.is_streaming}")
-                except Exception as e:
-                    self.logger.error(f"Error checking streaming status: {e}")
-
-        def get_streaming_stat(self):
-            return self.is_streaming
