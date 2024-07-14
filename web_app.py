@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS
 from obs_operator import OBSOperator
 from modules.rtmp_monitor import RTMPMonitor
 from modules.scheduler import Scheduler
@@ -7,10 +8,12 @@ from modules.logger import LoggerConfig
 
 class WebApp:
     def __init__(self, config_ini):
-        self.config_http = config_ini['http']
-        self.config_obs  = config_ini['obs']
+        self.webhook_port = config_ini['http']['webhook_port']
+        self.webhook_path = config_ini['http']['webhook_path']
+        self.monitoring_interval = int(config_ini['http']['monitoring_interval'])
 
         self.app = Flask(__name__)
+        CORS(self.app)
         self.obs_operator = OBSOperator(config_ini)
         self.rtmp_monitor = RTMPMonitor(
             rtmp_stat_url=config_ini['http']['monitoring_utl'],
@@ -27,11 +30,10 @@ class WebApp:
 
     # webhookによる切替操作
     def _setup_routes(self):
-        @self.app.route(self.config_http['webhook_path'], methods=['POST'])
+        @self.app.route(self.webhook_path, methods=['POST'])
         def webhook():
             data = request.json
             response = None
-            # Webhookで受信したデータを処理する
             if "stream" in data:
                 response = self._handle_stream_action(data.get("stream"), data)
             elif "pause" in data:
@@ -45,11 +47,16 @@ class WebApp:
 
         @self.app.route('/bitrate', methods=['GET'])
         def bitrate():
-            return str(self.rtmp_monitor.bw_in)
+            res = make_response(jsonify({'bitrate': str(self.rtmp_monitor.bw_in)}), 200)
+            res.headers['Content-Type'] = 'application/json'
+            return res
 
         @self.app.route('/avg_bitrate', methods=['GET'])
         def avg_bitrate():
-            return str(self.rtmp_monitor.avg_bw_in)
+            res = make_response(jsonify({'bitrate': str(self.rtmp_monitor.avg_bw_in)}), 200)
+            res.headers['Content-Type'] = 'application/json'
+            return res
+
 
     def _handle_stream_action(self, action, data):
         stream_actions = {
@@ -82,7 +89,7 @@ class WebApp:
         self.scheduler.add_interval_job_condition(
             func=self._stream_scene_control,
             condition_func=self._check_stream_status,
-            seconds=int(self.config_http['monitoring_interval']),
+            seconds=self.monitoring_interval,
             job_id="scene_control",
         )
 
@@ -94,13 +101,15 @@ class WebApp:
 
     # bitrate監視によるシーン切り替え
     def _stream_scene_control(self):
-        print("avg_bw: " + str(self.rtmp_monitor.avg_bw_in))
-        self.obs_operator.scene_switch_by_bitrate(self.rtmp_monitor.avg_bw_in)
+        self.obs_operator.scene_switch_by_bitrate(
+            bitrate=self.rtmp_monitor.bw_in,
+            avg_bitrate=self.rtmp_monitor.avg_bw_in
+        )
 
     def run(self):
         self.app.run(
             host='0.0.0.0',
-            port=self.config_http['webhook_port']
+            port=self.webhook_port
         )
 
 # ファイルが直接実行されたときだけサーバーを起動
