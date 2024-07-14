@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 import discord
 from discord.ext import commands
-from obs_operator import OBSOperator
-from modules.scheduler import Scheduler
+import requests
+# from modules.scheduler import Scheduler
 from modules.logger import LoggerConfig
 
-def discord_bot(config_ini, stream_status):
+def discord_bot(config_ini):
     intents = discord.Intents.default()
     intents.message_content = True
     bot = commands.Bot(
         command_prefix=config_ini['discord']['Command_Prefix'],
         intents=intents
     )
-    obs_operator = OBSOperator(config_ini, stream_status)
     config = config_ini['discord']
-    scheduler = Scheduler()
+    webhook_url = 'http://localhost:' + config_ini['http']['webhook_port'] + config_ini['http']['webhook_path']
+
+    # scheduler = Scheduler()
     logger = LoggerConfig.get_logger(discord_bot.__name__)
     logger.info('discord bot init')
 
@@ -26,63 +27,93 @@ def discord_bot(config_ini, stream_status):
     async def on_message(message):
         if message.author == bot.user:
             return
-        print('on message')
         await bot.process_commands(message)
 
-    def is_in_target_channel(ctx):
+    def _is_in_target_channel(ctx):
         channels = [int(id) for id in config['Target_Channel_IDs'].split(',') if id.strip()]
         return ctx.channel.id in channels
 
     @bot.command(name='hello')
     async def hello(ctx):
-        if not is_in_target_channel(ctx):
+        if not _is_in_target_channel(ctx):
             return
         await ctx.reply('Hello!')
 
     @bot.command(name='stream')
     async def stream(ctx, args: str):
-        if not config['obs_command_control'] :
+        if not _is_in_target_channel(ctx):
             return
-        if args in ['start', 'on']:
-            # 配信開始送信
-            # obs_operator.stream_start()
-            await ctx.send('配信準備中')
+        if not config['obs_command_control']:
+            return
 
-        elif args in ['stop', 'end', 'off']:
-            # 配信終了送信
-            # obs_operator.stream_stop()
-            await ctx.send('配信終了')
-
-        elif args == 'live':
-            obs_operator.stream_to_live()
-            await ctx.send('配信開始')
-
-        elif args == 'pause':
-            obs_operator.stream_switching_pause()
-            await ctx.send('待機を切り替えます')
-
-        else:
-            await ctx.send('incorrect argument!')
+        response = await _handle_stream_command(args)
+        await _process_response(ctx, response)
 
     @bot.command(name='pause')
     async def pause(ctx, args: str = None):
-        if not is_in_target_channel(ctx):
+        if not _is_in_target_channel(ctx):
             return
-        if args == 'on' or args is None:
-            obs_operator.scene_change_pause_on()
-            await ctx.send('待機に切り替えます')
 
-        elif args == 'off':
-            obs_operator.scene_change_pause_off()
-            await ctx.send('待機から戻ります')
+        response = await _handle_pause_command(args)
+        await _process_response(ctx, response)
+
+    async def _handle_stream_command(command: str):
+        valid_commands = {
+            'start': 'start',
+            'on': 'start',
+            'stop': 'stop',
+            'end': 'stop',
+            'off': 'stop',
+            'live': 'live',
+            'pause': 'pause',
+            'init': 'init'
+        }
+
+        if command in valid_commands:
+            return _post_to_webhook({'stream': valid_commands[command]}, webhook_url)
+        return None
+
+    async def _handle_pause_command(command: str):
+        if command == 'on' or command is None:
+            return _post_to_webhook({'pause': 'on'}, webhook_url)
+        elif command == 'off':
+            return _post_to_webhook({'pause': 'off'}, webhook_url)
+        return None
+
+    async def _process_response(ctx, response):
+        if response is None:
+            await ctx.send('incorrect argument!')
+            return
+
+        if response.status_code == 200:
+            message = {
+                'start': '配信準備中',
+                'stop': '配信終了',
+                'live': '配信開始',
+                'pause': '待機を切り替えます'
+            }.get(response.json().get('stream'), '操作完了')
+            await ctx.send(message)
+        else:
+            await ctx.send('コマンドの実行に失敗しました')
 
     @bot.event
     async def on_command_error(ctx, error):
         if isinstance(error, commands.CommandNotFound):
-            await ctx.send('コマンドがないです!')
+            await ctx.send('コマンドがありません')
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send('コマンドの引数が変です!')
+            await ctx.send('コマンドの引数が間違っています')
         else:
             await ctx.send(f'コマンドエラーです: {error}')
+
+    def _post_to_webhook(data: dict, url: str) -> bool:
+        try:
+            response = requests.post(url, json=data)
+            response.raise_for_status()
+
+        except requests.RequestException as e:
+            print(f"Failed to send POST request: {e}")
+
+        finally:
+            return response
 
     return bot

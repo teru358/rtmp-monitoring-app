@@ -6,12 +6,12 @@ from discord_bot import discord_bot
 from web_app import WebApp
 from modules.logger import LoggerConfig
 
-def run_twitch(config_ini, stream_status):
-    twitch = twitch_bot.create(config_ini, stream_status)
+def run_twitch(config_ini):
+    twitch = twitch_bot.create(config_ini)
     twitch.run()
 
-def run_discord(config_ini, stream_status):
-    discord = discord_bot(config_ini, stream_status)
+def run_discord(config_ini):
+    discord = discord_bot(config_ini)
     discord.run(config_ini['discord']['Token'])
 
 def main():
@@ -23,30 +23,26 @@ def main():
         is_connect_twich   = config_ini.getboolean('twitch', 'Connect')
         is_connect_discord = config_ini.getboolean('discord', 'Connect')
 
-        manager = mp.Manager()
-        stream_status = manager.dict()
-        stream_status['stream_camera_on'] = False
-        stream_status['stream_scene'] = 'intro' # [intro, live, fail, low]
-        stream_status['stream_previous_scene'] = 'intro'
-        stream_status['stream_bitrate'] = None
-        stream_status['obs_is_active'] = False
-
         p_twitch  = None
         p_discord = None
 
         if is_connect_twich:
             logger.info('startup twitch bot process')
             p_twitch =mp.Process(
-                target=run_twitch, args=(config_ini, stream_status) )
+                target=run_twitch,
+                args=(config_ini,)
+            )
             p_twitch.start()
 
         if is_connect_discord:
             logger.info('startup discord bot process')
             p_discord =mp.Process(
-                target=run_discord, args=(config_ini, stream_status) )
+                target=run_discord,
+                args=(config_ini,)
+            )
             p_discord.start()
 
-        web_app = WebApp(config_ini, stream_status)
+        web_app = WebApp(config_ini)
         web_app.run()
 
 

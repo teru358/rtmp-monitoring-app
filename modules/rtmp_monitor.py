@@ -12,9 +12,8 @@ class RTMPMonitor:
         self.interval = monitoring_interval
         maxlen = int(round(sec_of_average_bitrate/monitoring_interval))
         self.bw_in_values = deque(maxlen=maxlen)
-        self.avg_bw_in = 0 #平均値
         self.bw_in = 0 #最新値
-        self.loop = asyncio.new_event_loop()
+        self.avg_bw_in = 0 #平均値
 
     async def fetch_rtmp_stats(self):
         async with aiohttp.ClientSession() as session:
@@ -44,10 +43,9 @@ class RTMPMonitor:
                 self.parse_bw_in(xml_data)
                 bw_in = self.parse_bw_in(xml_data)
                 if bw_in is not None:
-                    self.bw_in = bw_in
-                    self.bw_in_values.append(self.bw_in)
-                    self.avg_bw_in = self.calculate_average_bw_in()
-                    print(f"Average bitrate: {self.avg_bw_in:.2f} kbps")
+                    self.bw_in = round(bw_in, 1)
+                    self.bw_in_values.append(bw_in)
+                    self.avg_bw_in = round(self.calculate_average_bw_in(), 1)
                 else:
                     self.bw_in = 0
             await asyncio.sleep(self.interval)

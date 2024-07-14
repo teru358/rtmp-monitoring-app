@@ -1,124 +1,223 @@
 # -*- coding: utf-8 -*-
 from modules.obs_controler import OBSController
+from modules.obs_monitor import OBSMonitor
 
 class OBSOperator(OBSController):
 
-    def __init__(self, config, stream_status):
-        self.config_obs = config['obs']
-        self.stream_status = stream_status
-        super().__init__(config['obs'])
+    def __init__(self, config):
+        self.scene_dict = {
+            'intro': config['obs']['Scene_Intro'],
+            'live':  config['obs']['Scene_Live'],
+            'fail':  config['obs']['Scene_Fail'],
+            'pause': config['obs']['Scene_Pause']
+        }
+        self.fail_bw = int(config['obs']['RTMP_Fail_Bitrate'])
+        self.low_bw = int(config['obs']['RTMP_Low_Bitrate'])
+        self.low_bw_source = config['obs']['RTMP_Low_Bitrate_Source_Name']
+        self.is_low_source = False
+
+        self.stream_scene = 'intro'
+        self.stream_previous_scene = None
+
+        connection_settings = {
+            'host': config['obs']['OBS_WS_host'],
+            'port': int(config['obs']['OBS_WS_port']),
+            'password': config['obs']['OBS_WS_Passwd']
+        }
+        super().__init__(**connection_settings)
+        self.obs_monitor = OBSMonitor(**connection_settings)
+        self.obs_monitor.run()
+
+    '''
+    def deco(func):
+        def _wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+        return _wrapper
+
+    def deco(arg):
+        def _deco(func):
+            def _wrapper(self, *args, **kwargs):
+                return func(self, *args, **kwargs)
+            return _wrapper
+        return _deco
+    '''
+
+    # deco
+    def obs_is_running(func):
+        def _wrapper(self, *args, **kwargs):
+            if self.obs_monitor.is_obs_running:
+                return func(self, *args, **kwargs)
+            else:
+                return False
+        return _wrapper
+
+    # deco
+    def obs_is_streaming(func):
+        def _wrapper(self, *args, **kwargs):
+            if self.obs_monitor.is_obs_streaming:
+                return func(self, *args, **kwargs)
+            else:
+                return False
+        return _wrapper
 
     # 配信開始
+    @obs_is_running
     def stream_start(self):
-        if not self.is_streaming():
-            self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-            self.stream_status['stream_scene'] = 'intro'
-            self.set_source_in_scene_visibility(
-                scene_name=self.config_obs['Scene_Live'],
-                source_name=self.config_obs['RTMP_Low_Bitrate_Source_Name'],
-                visibility='hidden'
-            )
-            self.set_scene(self.config_obs['Scene_Intro'])
-            self.start_streaming()
-            # self.logger.info('stream start!')
+        response = False
+        if not self.obs_monitor.is_obs_streaming:
+            response = self.start_streaming()
+        return response
 
-    # 配信終了（初期化）
+    # 配信終了
+    @obs_is_running
     def stream_stop(self):
-        if self.is_streaming():
-            self.stop_streaming()
-            if not self.get_streaming_status():
-                self.set_source_in_scene_visibility(
-                    scene_name=self.config_obs['Scene_Live'],
-                    source_name=self.config_obs['RTMP_Low_Bitrate_Source_Name'],
-                    visibility='hidden'
-                )
-                self.set_scene(self.config_obs['Scene_Intro'])
-                self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-                self.stream_status['stream_scene'] = 'intro'
-            # self.logger.info('stream stop!')
+        response = False
+        if  self.obs_monitor.is_obs_streaming:
+            response = self.stop_streaming()
+        return response
 
-    # introからliveへ（カメラON）
-    def stream_to_live(self):
-        self.set_scene(self.config_obs['Scene_Live'])
-        self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-        self.stream_status['stream_scene'] = 'live'
-        self.stream_status['stream_camera_on'] = True
-
-    # pause状態切替え(intro以外で)
-    def stream_switching_pause(self):
-        self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-        if self.stream_status['stream_camera_on']:
-            if self.stream_status['stream_scene'] == 'live':
-                self.set_scene(self.config_obs['Scene_Live'])
-            elif self.stream_status['stream_scene'] == 'fail':
-                self.set_scene(self.config_obs['Scene_Fail'])
-            self.stream_status['stream_camera_on'] = False
-            # self.logger.info('stream unpaused!')
-        else:
-            self.set_scene(self.config_obs['Scene_Pause'])
-            self.stream_status['stream_camera_on'] = True
-            # self.logger.info('stream paused!')
-
-    # sceneをintroにする
-    def scene_change_intro(self):
-        self.set_source_in_scene_visibility(
-            scene_name=self.config_obs['Scene_Live'],
-            source_name=self.config_obs['RTMP_Low_Bitrate_Source_Name'],
-            visibility='hidden')
-        self.set_scene(self.config_obs['Scene_Intro'])
-        self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-        self.stream_status['stream_scene'] = 'intro'
-
-    # sceneをliveにする
-    def scene_change_live(self):
+    # 初期化
+    @obs_is_running
+    @obs_is_streaming
+    def stream_initialize(self):
+        response = False
+        self.set_scene(self.scene_dict['intro'])
         self.hide_source(
-            scene_name=self.config_obs['Scene_Live'],
-            source_name=self.config_obs['RTMP_Low_Bitrate_Source_Name'])
-        self.set_scene(self.config_obs['Scene_Live'])
-        self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-        self.stream_status['stream_scene'] = 'live'
-        self.stream_status['stream_camera_on'] = True
-        # self.logger.info('scene change LIVE')
+            scene_name=self.scene_dict['live'],
+            source_name=self.low_bw_source
+        )
+        self.stream_previous_scene = None
+        self.stream_scene = 'intro'
+        return response
 
-    # sceneをfailにする
-    def scene_change_fail(self):
-        self.set_scene(self.config_obs['Scene_Fail'])
-        self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-        self.stream_status['stream_scene'] = 'fail'
-        # self.logger.info('scene change FAIL')
+    # intro -> live
+    @obs_is_running
+    @obs_is_streaming
+    def stream_to_live(self):
+        response = False
+        response = self.set_scene(self.scene_dict['live'])
+        if response is not False:
+            self.stream_previous_scene = self.stream_scene
+            self.stream_scene = 'live'
+        return response
 
-    # sceneをpauseに切り替える(intro以外で)
+    # -> intro
+    @obs_is_running
+    @obs_is_streaming
+    def scene_set_intro(self):
+        response = False
+        response = self.set_scene(self.scene_dict['intro'])
+        if response is not False:
+            self.stream_previous_scene = self.stream_scene
+            self.stream_scene = 'intro'
+        return response
+
+    # -> live
+    @obs_is_running
+    @obs_is_streaming
+    def scene_set_live(self):
+        response = False
+        self.hide_source(
+            scene_name=self.scene_dict['live'],
+            source_name=self.low_bw_source
+        )
+        response = self.set_scene(self.scene_dict['live'])
+        if response is not False:
+            self.stream_previous_scene = self.stream_scene,
+            self.stream_scene = 'live'
+        return response
+
+    # -> fail
+    @obs_is_running
+    @obs_is_streaming
+    def scene_set_fail(self):
+        response = False
+        response = self.set_scene(self.scene_dict['fail'])
+        if response is not False:
+            self.stream_previous_scene = self.stream_scene
+            self.stream_scene = 'fail'
+        return response
+
+    # <-> pause
+    @obs_is_running
+    @obs_is_streaming
     def scene_switch_pause(self):
-        if self.stream_status['stream_camera_on']:
-            if self.stream_status['stream_scene'] == 'live':
-                self.set_scene(self.config_obs['Scene_Live'])
-            elif self.stream_status['stream_scene'] == 'fail':
-                self.set_scene(self.config_obs['Scene_Fail'])
-            self.stream_status['stream_camera_on'] = False
-        else:
-            self.set_scene(self.config_obs['Scene_Pause'])
-            self.stream_status['stream_camera_on'] = True
+        response = False
+        if not self.stream_scene in ['intro']:
+            if self.stream_scene in ['pause']:
+                response = self.set_scene(self.stream_previous_scene)
+                if response is not False:
+                    self.stream_scene = self.stream_previous_scene
+                    self.stream_previous_scene = 'pause'
+            else:
+                response = self.set_scene(self.scene_dict['pause'])
+                if response is not False:
+                    self.stream_previous_scene = self.stream_scene
+                    self.stream_scene = 'pause'
+        return response
 
-    # sceneをpauseにする(intro以外で)
-    def scene_change_pause_on(self):
-        if not self.stream_status['stream_scene'] in ['intro', 'pause'] :
-            self.set_scene(self.config_obs['Scene_Pause'])
-            self.stream_status['stream_previous_scene'] = self.stream_status['stream_scene']
-            self.stream_status['stream_scene'] = 'pause'
-            # self.logger.info('scene change PAUSE')
+    # -> pause
+    @obs_is_running
+    @obs_is_streaming
+    def scene_set_pause_on(self):
+        response = False
+        if not self.stream_scene in ['intro', 'pause'] :
+            response = self.set_scene(self.scene_dict['pause'])
+            if response is not False:
+                self.stream_previous_scene = self.stream_scene
+                self.stream_scene = 'pause'
+        return response
 
-    # sceneをpauseから戻す
-    def scene_change_pause_off(self):
-        if self.stream_status['stream_scene'] == 'pause' :
-            self.set_scene(self.config_obs['stream_previous_scene'])
-            self.stream_status['stream_scene'] = self.stream_status['stream_previous_scene']
-            self.stream_status['stream_previous_scene'] = 'pause'
-            # self.logger.info('scene change PAUSE')
+    # <- pause
+    @obs_is_running
+    @obs_is_streaming
+    def scene_set_pause_off(self):
+        response = False
+        if self.stream_scene == 'pause' :
+            response = self.set_scene(self.stream_previous_scene)
+            if response is not False:
+                self.stream_scene = self.stream_previous_scene
+                self.stream_previous_scene = 'pause'
+        return response
 
-    # source表示を切り替える
+    # source on <-> off
+    @obs_is_running
+    @obs_is_streaming
     def source_swich_low_bitrate(self):
-        self.show_source(
-            scene_name=self.config_obs['Scene_Live'],
-            source_name=self.config_obs['RTMP_Low_Bitrate_Source_Name'])
-        self.stream_status['stream_scene'] = 'low'
-        # self.logger.info('source on bw_in LOW')
+        response = False
+        if self.is_low_source:
+            response = self.hide_source(
+                scene_name=self.scene_dict['live'],
+                source_name=self.low_bw_source
+            )
+            if response is not False:
+                self.is_low_source = False
+        else:
+            response = self.show_source(
+                scene_name=self.scene_dict['live'],
+                source_name=self.low_bw_source
+            )
+            if response is not False:
+                self.is_low_source = True
+        return response
+
+    # auto scene swich by bw_in
+    def scene_switch_by_bitrate(self, bitrate:int):
+        response = False
+        if self.stream_scene in ['intro', 'pause']:
+            print('switch skipped')
+            return
+        # fail
+        if bitrate < self.fail_bw:
+            response = self.scene_set_fail()
+        # low
+        elif bitrate < self.low_bw:
+            response = self.scene_set_live()
+            response = self.show_source(
+                scene_name=self.scene_dict['live'],
+                source_name=self.low_bw_source
+            )
+        # ok
+        else:
+            response = self.scene_set_live()
+        return response
