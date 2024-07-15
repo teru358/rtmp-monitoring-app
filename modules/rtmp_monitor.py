@@ -6,11 +6,11 @@ import xml.etree.ElementTree as ET
 from collections import deque
 
 class RTMPMonitor:
-    def __init__(self, rtmp_stat_url: str, streamkey: str, monitoring_interval: float = 0.5, sec_of_average_bitrate: float = 30):
+    def __init__(self, rtmp_stat_url: str, streamkey: str, monitoring_interval_sec: float = 0.5, average_bitrate_sec: float = 5):
         self.rtmp_stat_url = rtmp_stat_url
         self.streamkey = streamkey
-        self.interval = monitoring_interval
-        maxlen = int(round(sec_of_average_bitrate/monitoring_interval))
+        self.interval = monitoring_interval_sec
+        maxlen = int(round(average_bitrate_sec/monitoring_interval_sec))
         self.bw_in_values = deque(maxlen=maxlen)
         self.bw_in = 0 #最新値
         self.avg_bw_in = 0 #平均値
@@ -51,7 +51,6 @@ class RTMPMonitor:
             await asyncio.sleep(self.interval)
 
     def run(self):
-        print("start rtmp monitoring")
         def _run():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
