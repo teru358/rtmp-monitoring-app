@@ -18,6 +18,8 @@ class WebApp:
         self.rtmp_monitor = RTMPMonitor(
             rtmp_stat_url=config_ini['http']['monitoring_utl'],
             streamkey=config_ini['obs']['streamkey'],
+            monitoring_interval_sec=0.5, # rtmp_statを監視する間隔、
+            average_bitrate_sec=5 # 平均ビットレートを計算する秒数、長すぎると自動切替等に影響
         )
         self.scheduler = Scheduler()
         self.logger = LoggerConfig.get_logger(self.__class__.__name__)
@@ -38,7 +40,6 @@ class WebApp:
                 response = self._handle_stream_action(data.get("stream"), data)
             elif "pause" in data:
                 response = self._handle_pause_action(data.get("pause"))
-            print(response)
 
             if response:
                 return self._create_response(data, success=True)

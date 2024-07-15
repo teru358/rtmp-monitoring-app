@@ -28,20 +28,6 @@ class OBSOperator(OBSController):
         self.obs_monitor = OBSMonitor(**connection_settings)
         self.obs_monitor.run()
 
-    '''
-    def deco(func):
-        def _wrapper(self, *args, **kwargs):
-            return func(self, *args, **kwargs)
-        return _wrapper
-
-    def deco(arg):
-        def _deco(func):
-            def _wrapper(self, *args, **kwargs):
-                return func(self, *args, **kwargs)
-            return _wrapper
-        return _deco
-    '''
-
     # deco
     def obs_is_running(func):
         def _wrapper(self, *args, **kwargs):
@@ -78,16 +64,19 @@ class OBSOperator(OBSController):
 
     # 初期化
     @obs_is_running
-    @obs_is_streaming
     def stream_initialize(self):
         response = False
-        self.set_scene(self.scene_dict['intro'])
-        self.hide_source(
+        response =self.hide_source(
             scene_name=self.scene_dict['live'],
             source_name=self.low_bw_source
         )
-        self.stream_previous_scene = None
-        self.stream_scene = 'intro'
+        if response is False:
+            return response
+
+        response =self.set_scene(self.scene_dict['intro'])
+        if response is not False:
+            self.stream_previous_scene = None
+            self.stream_scene = 'intro'
         return response
 
     # intro -> live
@@ -202,22 +191,25 @@ class OBSOperator(OBSController):
         return response
 
     # auto scene swich by bw_in
-    def scene_switch_by_bitrate(self, bitrate:int):
+    def scene_switch_by_bitrate(self, bitrate: int, avg_bitrate: int):
         response = False
         if self.stream_scene in ['intro', 'pause']:
             print('switch skipped')
-            return
-        # fail
-        if bitrate < self.fail_bw:
+            return response
+        # live -> fail
+        if avg_bitrate < self.fail_bw: # or bitrate <= 0 :
             response = self.scene_set_fail()
-        # low
-        elif bitrate < self.low_bw:
+        # live -> low
+        elif avg_bitrate < self.low_bw:
             response = self.scene_set_live()
             response = self.show_source(
                 scene_name=self.scene_dict['live'],
                 source_name=self.low_bw_source
             )
-        # ok
+        # live -> live
+        elif self.stream_scene in ['live']:
+            return response
+        # fail, low -> live
         else:
             response = self.scene_set_live()
         return response

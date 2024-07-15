@@ -3,27 +3,25 @@ from twitchio import Channel, Message
 from twitchio.ext import commands
 import requests
 import json
-from obs_operator import OBSOperator
 from modules.scheduler import Scheduler
 from modules.logger import LoggerConfig
 
 class TwitchBot(commands.Bot):
 
-    def __init__(self, config_ini, stream_status):
+    def __init__(self, config_ini):
         super().__init__(
             initial_channels=[config_ini['twitch']['Login_Channel']],
             token=config_ini['twitch']['Access_Token'],
             prefix=config_ini['twitch']['Command_Prefix'],
         )
-        self.config_ini = config_ini
-        self.stream_status = stream_status
-        self.config = config_ini['twitch']
-        self.obs_operator = OBSOperator(config_ini, stream_status)
+        self.prefix = config_ini['twitch']['Command_Prefix']
+        self.is_command_control = config_ini.getboolean('twitch', 'obs_command_control')
+        self.webhook_url = 'http://localhost:' + config_ini['http']['webhook_port'] + config_ini['http']['webhook_path']
 
         self.__auth_error_message = "権限がありません"
         self.__command_error_message = "コマンドを確認してください"
         self.scheduler = Scheduler()
-        self.logger    = LoggerConfig.get_logger(self.__class__.__name__)
+        self.logger = LoggerConfig.get_logger(self.__class__.__name__)
         self.logger.info('twitch bot init')
 
     async def event_channel_joined(self, channel: Channel):
@@ -39,20 +37,14 @@ class TwitchBot(commands.Bot):
 
     # コメントが書き込まれると呼び出される
     async def event_message(self, message: Message):
-        # ボットの発言は無視する
-        # if message.echo:
-        #     return
-
-        # メッセージがコマンドであれば、ここで処理を終了
-        # if message.content.startswith(prefix):
-        if message.echo or any(message.content.startswith(prefix) for prefix in ['!']):
+        if message.echo or any(message.content.startswith(any_prefix) for any_prefix in ['!']):
             return
 
         user_name = message.author.name
         user_id = message.author.id
         print("{0}({1}): {2}".format(user_name, user_id, message.content))
 
-        if message.content.startswith(self.config['Command_Prefix']):
+        if message.content.startswith(self.prefix):
             await self.handle_commands(message)
 
     # hello こんにちは
@@ -60,75 +52,78 @@ class TwitchBot(commands.Bot):
     async def cmd_hello(self, ctx: commands.Context):
         await ctx.send(f'Hello! {ctx.author.name}!')
 
-    '''
-    # sample command
-    @commands.cooldown(rate=1, per=60, bucket=commands.Bucket.user)
-    @commands.command(name='sample')
-    async def sample(self, ctx: commands.Context, args=None):
-        if isinstance(args, str):
-            if self.message_auth_check(ctx.message, ['broadcaster', 'moderator', 'vip', 'subscriber', 'all']):
-                # do something
-                pass
-            else:
-                await ctx.send(self.__auth_error_message)
-        else:
-            await ctx.send(self.__command_error_message)
-    '''
-
-    # sample command
-    # @commands.cooldown(rate=1, per=60, bucket=commands.Bucket.user)
     @commands.command(name='stream')
     async def stream(self, ctx: commands.Context, args=None):
-        if not config['obs_command_control'] :
+        if not self.is_command_control:
             return
-        if isinstance(args, str):
-            if self.message_auth_check(ctx.message, ['broadcaster']):
-                if args in ['start', 'on']:
-                    # 配信開始送信
-                    self.obs_operator.stream_start()
-                    await ctx.send('配信準備中')
 
-                elif args in ['stop', 'end', 'off']:
-                    # 配信終了送信
-                    self.obs_operator.stream_stop()
-                    await ctx.send('配信終了')
-
-                elif args == 'live':
-                    self.obs_operator.stream_to_live()
-                    await ctx.send('配信開始')
-
-                elif args == "pause":
-                    # 配信終了送信
-                    self.obs_operator.stream_switching_pause()
-                    await ctx.send('待機を切り替えます')
-                else:
-                    await ctx.send(self.__command_error_message)
-            else:
-                await ctx.send(self.__auth_error_message)
-        else:
+        if not isinstance(args, str):
             await ctx.send(self.__command_error_message)
+            return
 
-    # sample command
-    # @commands.cooldown(rate=1, per=60, bucket=commands.Bucket.user)
+        if not self._message_auth_check(ctx.message, ['broadcaster']):
+            await ctx.send(self.__auth_error_message)
+            return
+
+        response = await self._handle_stream_command(args)
+        await self._process_response(ctx, response)
+
     @commands.command(name='pause')
     async def pause(self, ctx: commands.Context, args=None):
-        if not config['obs_command_control'] :
+        if not self.is_command_control:
             return
-        if isinstance(args, str):
-            if self.message_auth_check(ctx.message, ['broadcaster']):
-                if args == 'on' or args is None:
-                    obs_operator.scene_change_pause_on()
-                    await ctx.send('待機に切り替えます')
 
-                elif args == 'off':
-                    obs_operator.scene_change_pause_off()
-                    await ctx.send('待機から戻ります')
-            else:
-                await ctx.send(self.__auth_error_message)
+        # if not isinstance(args, str):
+        #     await ctx.send(self.__command_error_message)
+        #     return
+
+        if not self._message_auth_check(ctx.message, ['broadcaster']):
+            await ctx.send(self.__auth_error_message)
+            return
+
+        response = await self._handle_pause_command(args)
+        await self._process_response(ctx, response)
+
+    async def _handle_stream_command(self, command: str):
+        valid_commands = {
+            'start': 'start',
+            'on': 'start',
+            'stop': 'stop',
+            'end': 'stop',
+            'off': 'stop',
+            'live': 'live',
+            'pause': 'pause',
+            'init': 'init',
+        }
+
+        if command in valid_commands:
+            return self._post_to_webhook({'stream': valid_commands[command]}, self.webhook_url)
+        return None
+
+    async def _handle_pause_command(self, command: str):
+        if command == 'on' or command is None:
+            return self._post_to_webhook({'pause': 'on'}, self.webhook_url)
+        elif command == 'off':
+            return self._post_to_webhook({'pause': 'off'}, self.webhook_url)
+        return None
+
+    async def _process_response(self, ctx, response):
+        if response is None:
+            await ctx.send('incorrect argument!')
+            return
+
+        if response.status_code == 200:
+            message = {
+                'start': '配信準備中',
+                'stop': '配信終了',
+                'live': '配信開始',
+                'pause': '待機を切り替えます'
+            }.get(response.json().get('stream'), '操作完了')
+            await ctx.send(message)
         else:
-            await ctx.send(self.__command_error_message)
+            await ctx.send('コマンドの実行に失敗しました')
 
-    def message_auth_check(self, message, auth_list):
+    def _message_auth_check(self, message, auth_list):
         # auth_list [broadcaster, moderator, vip, subscriber, all]
         for auth in auth_list:
             if auth == 'broadcaster':
@@ -143,5 +138,16 @@ class TwitchBot(commands.Bot):
                 return True
         return False
 
-def create(config, stream_status):
-    return TwitchBot(config, stream_status)
+    def _post_to_webhook(self, data: dict, url: str) -> bool:
+        try:
+            response = requests.post(url, json=data)
+            response.raise_for_status()
+
+        except requests.RequestException as e:
+            print(f"Failed to send POST request: {e}")
+
+        finally:
+            return response
+
+def create(config):
+    return TwitchBot(config)

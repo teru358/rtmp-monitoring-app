@@ -38,7 +38,6 @@ class OBSMonitor:
             await asyncio.sleep(self.check_interval)
 
     def run(self):
-        print("start obs monitoring")
         def _run():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)

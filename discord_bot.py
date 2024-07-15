@@ -12,7 +12,8 @@ def discord_bot(config_ini):
         command_prefix=config_ini['discord']['Command_Prefix'],
         intents=intents
     )
-    config = config_ini['discord']
+    is_command_control = config_ini.getboolean('discord', 'obs_command_control')
+    tgt_channel_ids = [int(id) for id in config_ini['discord']['Target_Channel_IDs'].split(',') if id.strip()]
     webhook_url = 'http://localhost:' + config_ini['http']['webhook_port'] + config_ini['http']['webhook_path']
 
     # scheduler = Scheduler()
@@ -30,8 +31,7 @@ def discord_bot(config_ini):
         await bot.process_commands(message)
 
     def _is_in_target_channel(ctx):
-        channels = [int(id) for id in config['Target_Channel_IDs'].split(',') if id.strip()]
-        return ctx.channel.id in channels
+        return ctx.channel.id in tgt_channel_ids
 
     @bot.command(name='hello')
     async def hello(ctx):
@@ -43,7 +43,7 @@ def discord_bot(config_ini):
     async def stream(ctx, args: str):
         if not _is_in_target_channel(ctx):
             return
-        if not config['obs_command_control']:
+        if not is_command_control:
             return
 
         response = await _handle_stream_command(args)
@@ -52,6 +52,8 @@ def discord_bot(config_ini):
     @bot.command(name='pause')
     async def pause(ctx, args: str = None):
         if not _is_in_target_channel(ctx):
+            return
+        if not is_command_control:
             return
 
         response = await _handle_pause_command(args)
@@ -66,7 +68,7 @@ def discord_bot(config_ini):
             'off': 'stop',
             'live': 'live',
             'pause': 'pause',
-            'init': 'init'
+            'init': 'init',
         }
 
         if command in valid_commands:
@@ -90,7 +92,8 @@ def discord_bot(config_ini):
                 'start': '配信準備中',
                 'stop': '配信終了',
                 'live': '配信開始',
-                'pause': '待機を切り替えます'
+                'pause': '待機を切り替えます',
+                'init': '初期化します'
             }.get(response.json().get('stream'), '操作完了')
             await ctx.send(message)
         else:
