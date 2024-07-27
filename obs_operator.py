@@ -196,19 +196,15 @@ class OBSOperator(OBSController):
         if self.stream_scene in ['intro', 'pause']:
             print('switch skipped')
             return response
+
         # live -> fail
         if avg_bitrate < self.fail_bw: # or bitrate <= 0 :
             response = self.scene_set_fail()
-        # live -> low
-        elif avg_bitrate < self.low_bw:
-            response = self.scene_set_live()
-            response = self.show_source(
-                scene_name=self.scene_dict['live'],
-                source_name=self.low_bw_source
-            )
+
         # live -> live
         elif self.stream_scene in ['live']:
             return response
+
         # fail, low -> live
         else:
             response = self.scene_set_live()
