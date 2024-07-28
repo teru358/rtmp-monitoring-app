@@ -40,7 +40,10 @@ class WebApp:
                 response = self._handle_stream_action(data.get("stream"), data)
             elif "pause" in data:
                 response = self._handle_pause_action(data.get("pause"))
-
+            elif "cmd" in data:
+                response = self._handle_cmd_action(data.get("cmd"), data)
+                if response:
+                    data |= response
             if response:
                 return self._create_response(data, success=True)
             else:
@@ -77,6 +80,12 @@ class WebApp:
         }
         return pause_actions.get(action)()
 
+    def _handle_cmd_action(self, action, data):
+        cmd_actions = {
+            "status": self._get_stream_status
+        }
+        return cmd_actions.get(action)()
+
     def _create_response(self, data, success=True):
         status = 'success' if success else 'error'
         status_code = 200 if success else 400
@@ -95,10 +104,7 @@ class WebApp:
         )
 
     def _check_stream_status(self):
-        if self.obs_operator.obs_monitor.is_obs_streaming:
-            if not self.obs_operator.stream_scene in ['intro', 'pause']:
-                return True
-        return False
+        return self.obs_operator.scene_swich_check()
 
     # bitrate監視によるシーン切り替え
     def _stream_scene_control(self):
@@ -106,6 +112,15 @@ class WebApp:
             bitrate=self.rtmp_monitor.bw_in,
             avg_bitrate=self.rtmp_monitor.avg_bw_in
         )
+
+    def _get_stream_status(self):
+        data = {
+            "obs": self.obs_operator.obs_monitor.is_obs_running,
+            "streaming": self.obs_operator.obs_monitor.is_obs_streaming,
+            "scene": self.obs_operator.stream_scene,
+            "avg_bitrate": self.rtmp_monitor.avg_bw_in
+        }
+        return data
 
     def run(self):
         self.app.run(

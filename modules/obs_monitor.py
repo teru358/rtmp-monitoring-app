@@ -8,36 +8,78 @@ class OBSMonitor:
     def __init__(self, host:str, port:int, password:str):
         self.is_obs_running = False
         self.is_obs_streaming = False
-        self.check_interval = 10
+        self.scene_name = None
         self.logger = LoggerConfig.get_logger(self.__class__.__name__)
-        self.ws = obsws(host, port, password)
+        self.ws = obsws(host, port, password, on_connect=self.on_connect, on_disconnect=self.on_disconnect)
 
-    async def check_obs_status(self):
+    def on_connect(self, obs):
+        self.is_obs_running = True
+        self.logger.info("Connected to OBS")
+
+    def on_disconnect(self, obs):
+        self._condition_init()
+        self.logger.info("Disconnected from OBS")
+
+    def _condition_init(self):
+        self.is_obs_running = False
+        self.is_obs_streaming = False
+        self.scene_name = None
+
+    async def check_obs_running(self):
+        while True:
+            if not self.is_obs_running:
+                try:
+                    self.logger.info('Trying to connect to OBS...')
+                    await asyncio.wait_for(
+                        asyncio.to_thread(self.ws.connect),
+                        timeout=5
+                    )
+                except (exceptions.ConnectionFailure, asyncio.TimeoutError):
+                    self._condition_init()
+            await asyncio.sleep(10)
+
+    async def _update_stream_status(self):
         try:
-            self.logger.info('Trying to connect to OBS...')
-            await asyncio.wait_for(asyncio.to_thread(self.ws.connect), timeout=5)
-            self.logger.info("OBS is running.")
-            self.check_interval = 30
-            # 配信状況確認
-            status = self.ws.call(requests.GetStreamStatus())
-            self.is_obs_streaming = status.getOutputActive()
-            self.logger.info(f"Streaming status: {self.is_obs_streaming}")
-            self.ws.disconnect()
-            return True
+            res = self.ws.call(requests.GetStreamStatus())
+            if res.status:
+                self.is_obs_streaming = res.getOutputActive()
+            res = self.ws.call(requests.GetCurrentProgramScene())
+            if res.status:
+                self.scene_name = res.getSceneName()
+        except exceptions.ConnectionFailure:
+            self.logger.warning("Failed to check streaming status")
 
+    async def check_obs_streaming(self):
+        while True:
+            if self.is_obs_running:
+                await self._update_stream_status()
+            await asyncio.sleep(2)
+
+    async def _attempt_reconnection(self):
+        try:
+            self.logger.info('Trying to reconnect to OBS...')
+            await asyncio.wait_for(
+                asyncio.to_thread(self.ws.reconnect),
+                timeout=5
+            )
         except (exceptions.ConnectionFailure, asyncio.TimeoutError):
-            return False
+            self.reset_conditions()
+
+    async def reconnection(self):
+        while True:
+            await asyncio.sleep(600)
+            if self.is_obs_running:
+                await self._attempt_reconnection()
 
     async def monitor(self):
-        while True:
-            self.is_obs_running = await self.check_obs_status()
-            if not self.is_obs_running:
-                self.logger.warning("OBS is not running.")
-                self.check_interval = 10
-
-            await asyncio.sleep(self.check_interval)
+        await asyncio.gather(
+            self.check_obs_running(),
+            self.check_obs_streaming(),
+            self.reconnection()
+        )
 
     def run(self):
+        self.logger.info("start obs monitoring")
         def _run():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)

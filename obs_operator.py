@@ -12,11 +12,6 @@ class OBSOperator(OBSController):
             'pause': config['obs']['Scene_Pause']
         }
         self.fail_bw = int(config['obs']['RTMP_Fail_Bitrate'])
-        self.low_bw = int(config['obs']['RTMP_Low_Bitrate'])
-        self.low_bw_source = config['obs']['RTMP_Low_Bitrate_Source_Name']
-        self.is_low_source = False
-
-        self.stream_scene = 'intro'
         self.stream_previous_scene = None
 
         connection_settings = {
@@ -24,6 +19,7 @@ class OBSOperator(OBSController):
             'port': int(config['obs']['OBS_WS_port']),
             'password': config['obs']['OBS_WS_Passwd']
         }
+        
         super().__init__(**connection_settings)
         self.obs_monitor = OBSMonitor(**connection_settings)
         self.obs_monitor.run()
@@ -50,8 +46,9 @@ class OBSOperator(OBSController):
     @obs_is_running
     def stream_start(self):
         response = False
-        if not self.obs_monitor.is_obs_streaming:
-            response = self.start_streaming()
+        if self.stream_initialize():
+            if not self.obs_monitor.is_obs_streaming:
+                response = self.start_streaming()
         return response
 
     # 配信終了
@@ -66,17 +63,10 @@ class OBSOperator(OBSController):
     @obs_is_running
     def stream_initialize(self):
         response = False
-        response =self.hide_source(
-            scene_name=self.scene_dict['live'],
-            source_name=self.low_bw_source
-        )
-        if response is False:
-            return response
 
-        response =self.set_scene(self.scene_dict['intro'])
+        response = self.set_scene(self.scene_dict['intro'])
         if response is not False:
             self.stream_previous_scene = None
-            self.stream_scene = 'intro'
         return response
 
     # intro -> live
@@ -84,10 +74,10 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def stream_to_live(self):
         response = False
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
         response = self.set_scene(self.scene_dict['live'])
         if response is not False:
-            self.stream_previous_scene = self.stream_scene
-            self.stream_scene = 'live'
+            self.stream_previous_scene = scene
         return response
 
     # -> intro
@@ -95,10 +85,10 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def scene_set_intro(self):
         response = False
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
         response = self.set_scene(self.scene_dict['intro'])
         if response is not False:
-            self.stream_previous_scene = self.stream_scene
-            self.stream_scene = 'intro'
+            self.stream_previous_scene = scene
         return response
 
     # -> live
@@ -106,14 +96,10 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def scene_set_live(self):
         response = False
-        self.hide_source(
-            scene_name=self.scene_dict['live'],
-            source_name=self.low_bw_source
-        )
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
         response = self.set_scene(self.scene_dict['live'])
         if response is not False:
-            self.stream_previous_scene = self.stream_scene,
-            self.stream_scene = 'live'
+            self.stream_previous_scene = scene
         return response
 
     # -> fail
@@ -121,10 +107,10 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def scene_set_fail(self):
         response = False
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
         response = self.set_scene(self.scene_dict['fail'])
         if response is not False:
-            self.stream_previous_scene = self.stream_scene
-            self.stream_scene = 'fail'
+            self.stream_previous_scene = scene
         return response
 
     # <-> pause
@@ -132,17 +118,16 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def scene_switch_pause(self):
         response = False
-        if not self.stream_scene in ['intro']:
-            if self.stream_scene in ['pause']:
-                response = self.set_scene(self.stream_previous_scene)
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
+        if not scene in ['intro']:
+            if scene in ['pause']:
+                response = self.set_scene(self.scene_dict[self.stream_previous_scene])
                 if response is not False:
-                    self.stream_scene = self.stream_previous_scene
                     self.stream_previous_scene = 'pause'
             else:
                 response = self.set_scene(self.scene_dict['pause'])
                 if response is not False:
-                    self.stream_previous_scene = self.stream_scene
-                    self.stream_scene = 'pause'
+                    self.stream_previous_scene = scene
         return response
 
     # -> pause
@@ -150,11 +135,11 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def scene_set_pause_on(self):
         response = False
-        if not self.stream_scene in ['intro', 'pause'] :
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
+        if not scene in ['intro', 'pause'] :
             response = self.set_scene(self.scene_dict['pause'])
             if response is not False:
-                self.stream_previous_scene = self.stream_scene
-                self.stream_scene = 'pause'
+                self.stream_previous_scene = scene
         return response
 
     # <- pause
@@ -162,38 +147,19 @@ class OBSOperator(OBSController):
     @obs_is_streaming
     def scene_set_pause_off(self):
         response = False
-        if self.stream_scene == 'pause' :
-            response = self.set_scene(self.stream_previous_scene)
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
+        if scene == 'pause' :
+            response = self.set_scene(self.scene_dict[self.stream_previous_scene])
             if response is not False:
-                self.stream_scene = self.stream_previous_scene
                 self.stream_previous_scene = 'pause'
         return response
 
-    # source on <-> off
-    @obs_is_running
-    @obs_is_streaming
-    def source_swich_low_bitrate(self):
-        response = False
-        if self.is_low_source:
-            response = self.hide_source(
-                scene_name=self.scene_dict['live'],
-                source_name=self.low_bw_source
-            )
-            if response is not False:
-                self.is_low_source = False
-        else:
-            response = self.show_source(
-                scene_name=self.scene_dict['live'],
-                source_name=self.low_bw_source
-            )
-            if response is not False:
-                self.is_low_source = True
-        return response
 
     # auto scene swich by bw_in
     def scene_switch_by_bitrate(self, bitrate: int, avg_bitrate: int):
         response = False
-        if self.stream_scene in ['intro', 'pause']:
+        scene = self._get_scene_id(self.obs_monitor.scene_name)
+        if scene in ['intro', 'pause']:
             print('switch skipped')
             return response
 
@@ -202,7 +168,7 @@ class OBSOperator(OBSController):
             response = self.scene_set_fail()
 
         # live -> live
-        elif self.stream_scene in ['live']:
+        elif scene in ['live']:
             return response
 
         # fail, low -> live
