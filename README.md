@@ -19,7 +19,8 @@ twitchのチャットボットやdiscordボットと連携して、配信開始�
 * リレーサーバーにnginxを使用します。
 * applicationの名称はliveとしてください。  
   
-```conf:nginx.conf
+```
+conf:nginx.conf
 rtmp_auto_push on;
 rtmp {
     server {
@@ -39,7 +40,7 @@ rtmp {
 ### Installing
 
 * config-sample.iniをconfig.iniに変更し、内容を自分の環境に合わせて修正してください
-* ```
+```
 [obs]
 ;streamkeyの設定、なんでもよい
 streamkey = your_rtmp_streamkey
