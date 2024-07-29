@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=400, height=100">
+    <title>OBS Bitrate Announce</title>
+    <style>
+        body {
+            width: 400px;
+            height: 100px;
+            font-family: 'Meiryo', sans-serif; /* フォントの初期設定 */
+            background: transparent url('') no-repeat center center; /* 背景画像の初期設定 */
+            background-size: cover;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #bitrate-warning {
+            font-size: 48px;
+            color: white; /* 文字色の初期設定 */
+            text-shadow: 2px 2px 0 black; /* 縁取りの初期設定 */
+            opacity: 0; /* 初期状態では透明 */
+            transition: opacity 0.3s ease; /* フェードのトランジションを追加 */
+        }
+        #bitrate-warning.show {
+            opacity: 1; /* 表示状態では不透明 */
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            function fetchBitrate() {
+                $.getJSON('http://192.168.1.24:5000/avg_bitrate', function(data) {
+                    var kbps = (data.bitrate / 1000).toFixed(2);
+                    if (kbps <= 1000) { // ビットレートが1000 kbps以下の場合
+                        $('#bitrate-warning').addClass('show');
+                    } else {
+                        $('#bitrate-warning').removeClass('show');
+                    }
+                });
+            }
+            fetchBitrate();
+            setInterval(fetchBitrate, 1000); // 1秒おきに取得
+        });
+    </script>
+</head>
+<body>
+    <div id="bitrate-warning">ビットレート低下</div>
+</body>
+</html>
