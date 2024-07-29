@@ -38,8 +38,8 @@ rtmp {
 
 ### Installing
 
-* 自分の環境に合わせて、config.iniを編集してください
-```
+* config-sample.iniをconfig.iniに変更し、内容を自分の環境に合わせて修正してください
+* ```
 [obs]
 ;streamkeyの設定、なんでもよい
 streamkey = your_rtmp_streamkey
