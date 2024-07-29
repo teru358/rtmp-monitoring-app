@@ -117,7 +117,7 @@ class WebApp:
         data = {
             "obs": self.obs_operator.obs_monitor.is_obs_running,
             "streaming": self.obs_operator.obs_monitor.is_obs_streaming,
-            "scene": self.obs_operator.stream_scene,
+            "scene": self.obs_operator.obs_monitor.scene_name,
             "avg_bitrate": self.rtmp_monitor.avg_bw_in
         }
         return data
